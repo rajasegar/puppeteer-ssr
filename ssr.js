@@ -7,6 +7,9 @@ const RENDER_CACHE = new Map();
 
 
 async function ssr(url) {
+
+  const stylesheetContents = {};
+
   if(RENDER_CACHE.has(url)) {
     return { html: RENDER_CACHE.get(url), ttRenderMs: 0 };
   }
@@ -15,6 +18,19 @@ async function ssr(url) {
 
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
+
+  // Stash the responses of local stylesheets.
+  page.on('response', async resp => {
+    debugger;
+    const responseUrl = resp.url();
+    const sameOrigin = new URL(responseUrl).origin === new URL(url).origin;
+    const isStylesheet = resp.request().resourceType() === 'stylesheet';
+    console.log('sameOrigin: ', sameOrigin);
+    console.log('isStylesheet: ', isStylesheet);
+    if(sameOrigin && isStylesheet) {
+      stylesheetContents[responseUrl] = await resp.text();
+    }
+  });
 
   // 1. Intercept network requests
   await page.setRequestInterception(true);
@@ -41,6 +57,19 @@ async function ssr(url) {
     console.error(err);
     throw new Error('page.goto/watiForSelector timed out.');
   }
+
+  // Inline the CSS
+  // Replace stylesheets in the page with their equivalent <style>
+  await page.$$eval('link[rel="stylesheet"]', (links, content) => {
+    links.forEach(link => {
+      const cssText = content[link.href];
+      if(cssText) {
+        const style = document.createElement('style');
+        style.textContent = cssText;
+        link.replaceWith(style);
+      }
+    });
+  }, stylesheetContents);
 
   const html = await page.content(); // serialized HTML of page DOM.
   await browser.close();
