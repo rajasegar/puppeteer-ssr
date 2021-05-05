@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const fs = require('fs');
 
 // In-memory cache of rendered pages. Note: this will be cleared whenever the 
 // server process stops. If you need true persistence, use something like
@@ -21,12 +22,9 @@ async function ssr(url) {
 
   // Stash the responses of local stylesheets.
   page.on('response', async resp => {
-    debugger;
     const responseUrl = resp.url();
     const sameOrigin = new URL(responseUrl).origin === new URL(url).origin;
     const isStylesheet = resp.request().resourceType() === 'stylesheet';
-    console.log('sameOrigin: ', sameOrigin);
-    console.log('isStylesheet: ', isStylesheet);
     if(sameOrigin && isStylesheet) {
       stylesheetContents[responseUrl] = await resp.text();
     }
@@ -41,6 +39,15 @@ async function ssr(url) {
     const allowList = ['document','script','xhr','fetch'];
     if(!allowList.includes(req.resourceType())) {
       return req.abort();
+    }
+
+    // If request is for styles.css, respond with the minified version.
+    if(req.url().endsWith('styles.css')) {
+      return req.respond({
+        status: 200,
+        contentType: 'text/css',
+        body: fs.readFileSync('./public/styles.min.css', 'utf-8')
+      });
     }
 
     // 3. Pass through all other requests.
