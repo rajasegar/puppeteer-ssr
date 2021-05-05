@@ -15,6 +15,22 @@ async function ssr(url) {
 
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
+
+  // 1. Intercept network requests
+  await page.setRequestInterception(true);
+
+  page.on('request', req => {
+    // 2. Ignore requests for resources that don't produce DOM
+    // (images, stylesheets, media)
+    const allowList = ['document','script','xhr','fetch'];
+    if(!allowList.includes(req.resourceType())) {
+      return req.abort();
+    }
+
+    // 3. Pass through all other requests.
+    req.continue();
+  });
+
   try {
     // networkidle0 waits for the network to be idle (no requests for 500ms).
     // The page's JS has likely produced markup by this point, but wait longer
