@@ -7,7 +7,13 @@ const fs = require('fs');
 const RENDER_CACHE = new Map();
 
 
-async function ssr(url) {
+/**
+ * @param {string} url URL to prerender.
+ * @param {string} browserWSEndpoint Optional remove debugging URL. If
+ *  provided, Puppeteer's reconnects to the browser instance. Otherwise,
+ *  a new browser instance is launched.
+ */
+async function ssr(url, browserWSEndpoint) {
 
   const stylesheetContents = {};
 
@@ -17,7 +23,8 @@ async function ssr(url) {
 
   const start = Date.now();
 
-  const browser = await puppeteer.launch();
+  console.info('Connecting to existing Chrome instance.');
+  const browser = await puppeteer.connect({browserWSEndpoint});
   const page = await browser.newPage();
 
   // Stash the responses of local stylesheets.
